@@ -1,0 +1,7 @@
+	interface:
+  display_name: "分支与 PR 协作"
+  short_description: "按固定规范管理分支、PR、发布与同步"
+  default_prompt: "Use $branch-pr-workflow to prepare and validate this repository change for its branch and PR workflow."
+
+policy:
+  allow_implicit_invocation: false
