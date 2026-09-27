@@ -1,5 +1,5 @@
 ---
-name: branch-pr-workflow
+name: git-workflow
 description: 固化并执行分支、Pull Request、合并、发布、hotfix 与同步清理规范。任何仓库追踪文件修改前必须调用；也用于创建或审查分支/PR、完整或选择性发布、线上紧急修复，以及需要验证分支保护、AI 协作边界和人工审核要求的任务。
 ---
 
@@ -7,7 +7,12 @@ description: 固化并执行分支、Pull Request、合并、发布、hotfix 与
 
 ## 显式调用
 
-仅在用户明确输入 `$branch-pr-workflow` 时启用本 skill；未明确调用时不自动注入本 skill 的规则。
+仅在用户明确输入 `$git-workflow` 时启用本 skill；未明确调用时不自动注入本 skill 的规则。
+
+## 适用范围
+
+- 完整模式：同时具备 `develop` 与生产分支（`main`/`master`）的业务仓库，执行全部分支、PR、发布与 worktree 规则。
+- 轻量模式：不具备该分支模型的仓库（例如本 skill 自身源码仓库，只有单一默认分支）。此类仓库只执行提交消息、授权、worktree 命名与清理规则，不强制 `develop` 基线，也不因缺少 `develop` 阻塞。
 
 ## 核心原则
 
@@ -40,7 +45,7 @@ git remote -v
 
 确认顺序固定为：检查当前分支、检查工作区差异、确认分支基线为 `develop`，然后才可以编辑文件。`hotfix/*` 和 `release/*` 按本技能既定的生产分支基线规则执行，但仍必须在短期分支内修改。
 
-若当前工作区存在无关未提交改动，或当前分支不符合目标基线，不得在原工作区混入本次修改。必须从正确基线创建独立 worktree 与短期分支，只迁移本次目标文件；无关文件保留在原 worktree，禁止暂存、提交、移动或格式化。
+若当前工作区存在无关未提交改动，或当前分支不符合目标基线，不得在原工作区混入本次修改。必须先按“Worktree 归属、命名与清理”一节隔离：Codex 运行环境内禁止手动 `git worktree add`，改用 Codex 的 worktree 入口或就地创建短期分支；仅在非 Codex 环境才允许用 `scripts/worktree.ps1` 创建独立 worktree 与短期分支。只迁移本次目标文件；无关文件保留在原 worktree，禁止暂存、提交、移动或格式化。
 
 ## 分支定位与命名
 
@@ -51,6 +56,20 @@ git remote -v
 - 名称只使用英文小写、数字和连字符；不使用空格、下划线或个人姓名，能用时加入 Issue/Jira/Linear 编号。
 - 一个短期分支只服务一个独立功能或问题；一个独立变更对应一个 PR。
 - 缺少 `develop`、生产分支识别不清或分支基线不符合规范时，停止并报告阻塞；不得擅自创建或迁移长期分支。
+
+## Worktree 归属、命名与清理
+
+- Codex 运行环境内禁止手动 `git worktree add`：Codex 只回收它自己创建的 worktree，手动创建的不进清理队列，会持续占用磁盘。需要新 worktree 时走 Codex 的 worktree 入口，其创建、命名与回收交给 Codex，本 skill 不介入。
+- 检测是否已在 linked worktree：`git rev-parse --git-dir` 与 `git rev-parse --git-common-dir` 解析为绝对路径后不同即处于 linked worktree；此时就地创建短期分支，禁止嵌套创建。路径包含 `/.codex/worktrees/` 表示由 Codex 管理。
+- 非 Codex 环境的手动兜底统一使用 `scripts/worktree.ps1`，禁止直接执行 `git worktree add` 或 `git worktree remove`。
+- 手动 worktree 根目录为仓库同级 `<仓库>.worktrees`，可用 `GIT_WORKFLOW_WORKTREE_ROOT` 环境变量或 `-WorktreeRoot` 参数覆盖。
+- worktree 目录名等于分支名把 `/` 替换为 `-`，即 `<type>-<short-description>`，例如 `feature/login-flow` 对应 `<仓库>.worktrees/feature-login-flow`。禁止时间戳、随机串、中文、空格、下划线和个人姓名。
+- 清理：合并后必须删除对应 worktree 并执行 `git worktree prune`；同一时间最多保留 1 个活动 worktree；不在 worktree 内重复安装依赖，除非本次任务确需运行测试。删除含未提交改动的 worktree 必须显式 `-Force`。
+
+```powershell
+& "<skill目录>/scripts/worktree.ps1" -Action New -Branch "feature/<short-description>" -RepositoryPath "<仓库路径>"
+& "<skill目录>/scripts/worktree.ps1" -Action Remove -Branch "feature/<short-description>" -RepositoryPath "<仓库路径>"
+```
 
 ## 保护与授权
 
@@ -78,7 +97,7 @@ git remote -v
 同步发生冲突时，立即停止且不推送，不执行 `git merge --abort`；保留冲突文件和 Git 合并状态，明确申请人工接入解决冲突。人工完成合并后重新执行推送命令。该同步不改变完成开发任务后的自动提交条件、推送授权条件或业务提交消息规范。
 
 ```powershell
-& ".codex/skills/branch-pr-workflow/scripts/push_branch.ps1" \
+& "<skill目录>/scripts/push_branch.ps1" \
   -RepositoryPath "<仓库路径>" -Branch "feature/<short-description>" -Authorized
 ```
 

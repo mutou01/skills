@@ -14,7 +14,7 @@ function Invoke-TestGit {
 }
 
 function New-TestRepository {
-    $root = Join-Path ([System.IO.Path]::GetTempPath()) ("branch-pr-workflow-$([guid]::NewGuid().ToString('N'))")
+    $root = Join-Path ([System.IO.Path]::GetTempPath()) ("git-workflow-$([guid]::NewGuid().ToString('N'))")
     $remote = Join-Path $root 'remote.git'
     $seed = Join-Path $root 'seed'
     $work = Join-Path $root 'work'
