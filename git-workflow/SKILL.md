@@ -28,7 +28,7 @@ description: 固化并执行分支、Pull Request、合并、发布、hotfix 与
 
 执行上述修改前，必须完成并在工作记录中报告以下工作区预检：
 
-```powershell
+```bash
 git rev-parse --show-toplevel
 git branch --show-current
 git status --short
@@ -45,7 +45,7 @@ git remote -v
 
 确认顺序固定为：检查当前分支、检查工作区差异、确认分支基线为 `develop`，然后才可以编辑文件。`hotfix/*` 和 `release/*` 按本技能既定的生产分支基线规则执行，但仍必须在短期分支内修改。
 
-若当前工作区存在无关未提交改动，或当前分支不符合目标基线，不得在原工作区混入本次修改。必须先按“Worktree 归属、命名与清理”一节隔离：Codex 运行环境内禁止手动 `git worktree add`，改用 Codex 的 worktree 入口或就地创建短期分支；仅在非 Codex 环境才允许用 `scripts/worktree.ps1` 创建独立 worktree 与短期分支。只迁移本次目标文件；无关文件保留在原 worktree，禁止暂存、提交、移动或格式化。
+若当前工作区存在无关未提交改动，或当前分支不符合目标基线，不得在原工作区混入本次修改。必须先按“Worktree 归属、命名与清理”一节隔离：Codex 运行环境内禁止手动 `git worktree add`，改用 Codex 的 worktree 入口或就地创建短期分支；仅在非 Codex 环境才允许用 `scripts/worktree.sh` 创建独立 worktree 与短期分支。只迁移本次目标文件；无关文件保留在原 worktree，禁止暂存、提交、移动或格式化。
 
 ## 分支定位与命名
 
@@ -61,14 +61,14 @@ git remote -v
 
 - Codex 运行环境内禁止手动 `git worktree add`：Codex 只回收它自己创建的 worktree，手动创建的不进清理队列，会持续占用磁盘。需要新 worktree 时走 Codex 的 worktree 入口，其创建、命名与回收交给 Codex，本 skill 不介入。
 - 检测是否已在 linked worktree：`git rev-parse --git-dir` 与 `git rev-parse --git-common-dir` 解析为绝对路径后不同即处于 linked worktree；此时就地创建短期分支，禁止嵌套创建。路径包含 `/.codex/worktrees/` 表示由 Codex 管理。
-- 非 Codex 环境的手动兜底统一使用 `scripts/worktree.ps1`，禁止直接执行 `git worktree add` 或 `git worktree remove`。
-- 手动 worktree 根目录为仓库同级 `<仓库>.worktrees`，可用 `GIT_WORKFLOW_WORKTREE_ROOT` 环境变量或 `-WorktreeRoot` 参数覆盖。
+- 非 Codex 环境的手动兜底统一使用 `scripts/worktree.sh`，禁止直接执行 `git worktree add` 或 `git worktree remove`。
+- 手动 worktree 根目录为仓库同级 `<仓库>.worktrees`，可用 `GIT_WORKFLOW_WORKTREE_ROOT` 环境变量或 `--worktree-root` 参数覆盖。
 - worktree 目录名等于分支名把 `/` 替换为 `-`，即 `<type>-<short-description>`，例如 `feature/login-flow` 对应 `<仓库>.worktrees/feature-login-flow`。禁止时间戳、随机串、中文、空格、下划线和个人姓名。
-- 清理：合并后必须删除对应 worktree 并执行 `git worktree prune`；同一时间最多保留 1 个活动 worktree；不在 worktree 内重复安装依赖，除非本次任务确需运行测试。删除含未提交改动的 worktree 必须显式 `-Force`。
+- 清理：合并后必须删除对应 worktree 并执行 `git worktree prune`；同一时间最多保留 1 个活动 worktree；不在 worktree 内重复安装依赖，除非本次任务确需运行测试。删除含未提交改动的 worktree 必须显式 `--force`。
 
-```powershell
-& "<skill目录>/scripts/worktree.ps1" -Action New -Branch "feature/<short-description>" -RepositoryPath "<仓库路径>"
-& "<skill目录>/scripts/worktree.ps1" -Action Remove -Branch "feature/<short-description>" -RepositoryPath "<仓库路径>"
+```bash
+bash "<skill目录>/scripts/worktree.sh" --action New --branch "feature/<short-description>" --repository-path "<仓库路径>"
+bash "<skill目录>/scripts/worktree.sh" --action Remove --branch "feature/<short-description>" --repository-path "<仓库路径>"
 ```
 
 ## 保护与授权
@@ -88,17 +88,17 @@ git remote -v
 
 ## 自动推送
 
-只有用户明确授权推送当前短期分支且本地验证通过后，agent 才可自动执行 `scripts/push_branch.ps1`。可接受的自然语言授权例如：“允许自动推送当前 feature 分支”或“本次修复验证通过后自动推送”。agent 必须在执行报告中记录对应授权和实际推送结果。
+只有用户明确授权推送当前短期分支且本地验证通过后，agent 才可自动执行 `scripts/push_branch.sh`。可接受的自然语言授权例如：“允许自动推送当前 feature 分支”或“本次修复验证通过后自动推送”。agent 必须在执行报告中记录对应授权和实际推送结果。
 
-`-Authorized` 不是 Token、密钥或平台权限，也不需要申请或生成；它是 agent 在已经核实用户明确授权后传入的本地确认开关。脚本只允许推送当前检出的 `feature/*`、`bugfix/*`、`hotfix/*` 或 `release/*` 分支；拒绝 `main`、`master`、`develop`、分离 HEAD、命名不合规分支及与当前分支不一致的推送目标。
+`--authorized` 不是 Token、密钥或平台权限，也不需要申请或生成；它是 agent 在已经核实用户明确授权后传入的本地确认开关。脚本只允许推送当前检出的 `feature/*`、`bugfix/*`、`hotfix/*` 或 `release/*` 分支；拒绝 `main`、`master`、`develop`、分离 HEAD、命名不合规分支及与当前分支不一致的推送目标。
 
-每次推送 `feature/*` 或 `bugfix/*` 前，脚本必须先获取远端最新 `develop` 并将 `<remote>/develop` 合并到当前分支，再执行推送。同步使用当前 `-Remote` 参数指定的远端，默认 `origin`；`hotfix/*`、`release/*` 继续遵循生产分支基线，不合并 `develop`。
+每次推送 `feature/*` 或 `bugfix/*` 前，脚本必须先获取远端最新 `develop` 并将 `<remote>/develop` 合并到当前分支，再执行推送。同步使用当前 `--remote` 参数指定的远端，默认 `origin`；`hotfix/*`、`release/*` 继续遵循生产分支基线，不合并 `develop`。
 
 同步发生冲突时，立即停止且不推送，不执行 `git merge --abort`；保留冲突文件和 Git 合并状态，明确申请人工接入解决冲突。人工完成合并后重新执行推送命令。该同步不改变完成开发任务后的自动提交条件、推送授权条件或业务提交消息规范。
 
-```powershell
-& "<skill目录>/scripts/push_branch.ps1" \
-  -RepositoryPath "<仓库路径>" -Branch "feature/<short-description>" -Authorized
+```bash
+bash "<skill目录>/scripts/push_branch.sh" \
+  --repository-path "<仓库路径>" --branch "feature/<short-description>" --authorized
 ```
 
 脚本对 `feature/*`、`bugfix/*` 先执行与 `develop` 的同步合并，再执行普通 `git push --set-upstream <remote> <branch>`，不支持强推。推送成功仅表示远端接受了当前提交，不等于 CI 通过、PR 已创建、人工审核完成或代码已合并；完成报告必须分别说明这些状态。
