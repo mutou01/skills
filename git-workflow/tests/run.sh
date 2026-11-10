@@ -178,6 +178,9 @@ section "policy"
 content="$(cat "$SKILL_MD")"
 metadata="$(cat "$METADATA")"
 
+# The preflight and branch gate must route through one authoritative section.
+assert_eq "$(grep -c '^## 修改前强制' "$SKILL_MD")" "1" "修改前预检与分支关卡应只有一个规则入口"
+
 assert_contains "$content" 'git check-ignore -q' "SKILL.md 应含 gitignore 预检"
 assert_contains "$content" '被 `.gitignore` 排除的内容' "SKILL.md 应含 gitignore 规则"
 assert_contains "$content" '直接在当前工作目录修改和验证' "SKILL.md 应含就地验证规则"
