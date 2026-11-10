@@ -45,7 +45,7 @@ git remote -v
 
 确认顺序固定为：检查当前分支、检查工作区差异、确认分支基线为 `develop`，然后才可以编辑文件。`hotfix/*` 和 `release/*` 按本技能既定的生产分支基线规则执行，但仍必须在短期分支内修改。
 
-若当前工作区存在无关未提交改动，或当前分支不符合目标基线，不得在原工作区混入本次修改。必须先按“Worktree 归属、命名与清理”一节隔离：Codex 运行环境内禁止手动 `git worktree add`，改用 Codex 的 worktree 入口或就地创建短期分支；仅在非 Codex 环境才允许用 `scripts/worktree.sh` 创建独立 worktree 与短期分支。只迁移本次目标文件；无关文件保留在原 worktree，禁止暂存、提交、移动或格式化。
+若当前工作区存在无关未提交改动，或当前分支不符合目标基线，不得在原工作区混入本次修改。必须先按“Worktree 归属、命名与清理”一节隔离；确需新建 worktree 时，由该节统一选择创建入口。只迁移本次目标文件；无关文件保留在原 worktree，禁止暂存、提交、移动或格式化。
 
 ## 分支定位与命名
 
@@ -59,9 +59,11 @@ git remote -v
 
 ## Worktree 归属、命名与清理
 
-- Codex 运行环境内禁止手动 `git worktree add`：Codex 只回收它自己创建的 worktree，手动创建的不进清理队列，会持续占用磁盘。需要新 worktree 时走 Codex 的 worktree 入口，其创建、命名与回收交给 Codex，本 skill 不介入。
-- 检测是否已在 linked worktree：`git rev-parse --git-dir` 与 `git rev-parse --git-common-dir` 解析为绝对路径后不同即处于 linked worktree；此时就地创建短期分支，禁止嵌套创建。路径包含 `/.codex/worktrees/` 表示由 Codex 管理。
-- 非 Codex 环境的手动兜底统一使用 `scripts/worktree.sh`，禁止直接执行 `git worktree add` 或 `git worktree remove`。
+- 先判断是否确需新建。`git rev-parse --git-dir` 与 `git rev-parse --git-common-dir` 解析为绝对路径后不同，表示已处于 linked worktree；符合修改预检时就地复用，需要时创建获授权的短期分支。禁止从 linked worktree 嵌套创建。
+- 确需新建时，优先级为：**用户明确指定的新建 worktree 规则 > 编码代理原生的新建 worktree 规则 > 本技能的兜底规则**。团队或公司规范以用户明确提供或指定的内容为准；通常没有此类覆盖，无需例行询问。若创建入口无法满足已明确的规则，停止并说明冲突。
+- 用户指定的规则只覆盖其明确规定的事项，且不得绕过运行环境的强制限制。其余按当前编码代理可核实的原生规则处理，例如使用 Codex 的 worktree 入口。由编码代理管理的 worktree 按其规则创建、命名和回收，禁止手动 `git worktree add` 或用本技能脚本替代。原生规则适用但入口不可用或创建失败时，停止新建并报告原因，不降级为手动兜底。
+- 只有没有用户规则覆盖创建方式、且当前编码代理没有适用的原生规则时，才用 `scripts/worktree.sh` 创建 worktree。以下目录、命名和清理要求只适用于本技能的手动兜底；禁止直接执行 `git worktree add` 或 `git worktree remove`。
+- 上述优先级只处理新建 worktree 及其归属，不改变分支基线、分支命名或操作授权。原生入口若产生临时分支或分离 HEAD，仍须通过修改前的分支关卡。
 - 手动 worktree 根目录为仓库同级 `<仓库>.worktrees`，可用 `GIT_WORKFLOW_WORKTREE_ROOT` 环境变量或 `--worktree-root` 参数覆盖。
 - worktree 目录名等于分支名把 `/` 替换为 `-`，即 `<type>-<short-description>`，例如 `feature/login-flow` 对应 `<仓库>.worktrees/feature-login-flow`。禁止时间戳、随机串、中文、空格、下划线和个人姓名。
 - 清理：合并后必须删除对应 worktree 并执行 `git worktree prune`；同一时间最多保留 1 个活动 worktree；不在 worktree 内重复安装依赖，除非本次任务确需运行测试。删除含未提交改动的 worktree 必须显式 `--force`。
