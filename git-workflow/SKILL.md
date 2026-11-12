@@ -14,19 +14,11 @@ description: 固化并执行分支、Pull Request、合并、发布、hotfix 与
 - 完整模式：同时具备 `develop` 与生产分支（`main`/`master`）的业务仓库，执行全部分支、PR、发布与 worktree 规则。
 - 轻量模式：不具备该分支模型的仓库（例如本 skill 自身源码仓库，只有单一默认分支）。此类仓库只执行提交消息、授权、worktree 命名与清理规则，不强制 `develop` 基线，也不因缺少 `develop` 阻塞。
 
-## 核心原则
-
-先定位再修改。先读取仓库根目录及目标路径最近的 `AGENTS.md`，再检查当前分支、工作区、远端、相关 README、接口、调用链和测试。明确需求范围、影响模块、验收条件和成功证据后才允许修改。
-
-坚持最小修改和对抗性审查：只改当前需求必需的文件，保留其他成员已有改动；完成实现后主动检查回归路径、边界输入、权限/鉴权、数据一致性、支付和部署影响。不得凭经验伪造接口、命令、测试、CI、PR 或完成结论。
-
 ## 修改前强制门禁
 
-本 skill 适用于任何会修改仓库追踪文件的任务，不限于用户明确提到 Git、分支或 PR 的场景。修改包括 `apply_patch`、编辑器写入、代码生成、迁移、格式化、`git add`、提交和任何会改写受版本控制文件的命令。
+本节适用于任何会修改仓库追踪文件的任务，包括补测试、生成文件、格式化、暂存和提交。先读取仓库根目录和目标路径最近的 `AGENTS.md`，再对每个目标执行 `git check-ignore -q -- <目标路径>`。被 `.gitignore` 排除的内容直接在当前工作目录修改和验证，不新建分支、不创建 worktree，也不得用 `git add -f` 纳入版本控制。
 
-修改前先执行 `git check-ignore -q -- <目标路径>`。命令成功表示目标被 `.gitignore` 排除：直接在当前工作目录修改和验证，不新建分支、不创建 worktree，也不得使用 `git add -f` 将其纳入版本控制。
-
-执行上述修改前，必须完成并在工作记录中报告以下工作区预检：
+首次修改追踪文件前，按顺序执行并记录工作区预检：
 
 ```bash
 git rev-parse --show-toplevel
@@ -35,23 +27,17 @@ git status --short
 git remote -v
 ```
 
-随后读取本 skill 与适用的 `AGENTS.md`，确认当前分支符合本次变更的基线要求、识别所有既有未提交改动，并明确测试先行的验收条件。预检未完成、仓库边界不清或分支规则不满足时，不得调用修改文件的工具；先报告发现并等待用户对分支或范围作出决定。
+分支关卡仅适用于 Git 跟踪的测试、源代码与文档。完整模式下，检查当前分支和工作区差异后，按“分支定位与命名”核实当前短期分支及其基线；不得直接在 `develop`、`main` 或 `master` 上修改。
 
-一次任务内首次修改前的门禁不得被“已经阅读过 AGENTS.md”“仅改一个文件”“只补测试”或“没有执行 Git 命令”绕过。若任务本身是修复本 skill，仍须先完成同一套预检，再以测试验证规则文本和默认提示均已生效。
+预检未完成、仓库边界不清或分支规则不满足时，不得修改；先报告发现，等待用户决定分支或范围。若有无关未提交改动或分支基线不符，须按“Worktree 归属、命名与清理”隔离后再修改；只迁移本次目标文件，无关文件留在原 worktree，不得暂存、提交、移动或格式化。
 
-## 修改前强制关卡
-
-本关卡仅适用于 Git 跟踪的测试、源代码与文档。修改这些内容前，必须先确认当前检出的是从 `develop` 创建的短期 `feature/*` 或 `bugfix/*` 分支。`develop`、`main` 和 `master` 上禁止直接修改；测试文件与其他代码同样受此规则约束，不能以 TDD 的测试先行为由先写后建分支。被 `.gitignore` 排除的内容按“修改前强制门禁”直接在当前工作目录处理。
-
-确认顺序固定为：检查当前分支、检查工作区差异、确认分支基线为 `develop`，然后才可以编辑文件。`hotfix/*` 和 `release/*` 按本技能既定的生产分支基线规则执行，但仍必须在短期分支内修改。
-
-若当前工作区存在无关未提交改动，或当前分支不符合目标基线，不得在原工作区混入本次修改。必须先按“Worktree 归属、命名与清理”一节隔离：Codex 运行环境内禁止手动 `git worktree add`，改用 Codex 的 worktree 入口或就地创建短期分支；仅在非 Codex 环境才允许用 `scripts/worktree.sh` 创建独立 worktree 与短期分支。只迁移本次目标文件；无关文件保留在原 worktree，禁止暂存、提交、移动或格式化。
+首次修改前按“实现与测试闭环”明确验收条件；只改一处、先补测试或已读过 `AGENTS.md` 都不能跳过门禁。修改本技能也遵守同一门禁，并通过测试验证规则文本和默认提示。
 
 ## 分支定位与命名
 
 - 长期分支为 `main` 与 `develop`；仓库使用 `master` 时，将 `master` 兼容识别为生产分支别名，但仍要求存在 `develop`。
 - `feature/<short-description>` 和 `bugfix/<short-description>` 从 `develop` 创建并合入 `develop`。
-- `hotfix/<short-description>` 从生产分支（`main` 或兼容的 `master`）创建，修复后合入生产分支并立即同步到 `develop`。
+- `hotfix/<short-description>` 从生产分支（`main` 或兼容的 `master`）创建，修复后合入生产分支，并立即将同一修复同步到 `develop`。
 - `release/<version>` 仅用于选择性发布或版本冻结，从生产分支创建，完成后删除。
 - 名称只使用英文小写、数字和连字符；不使用空格、下划线或个人姓名，能用时加入 Issue/Jira/Linear 编号。
 - 一个短期分支只服务一个独立功能或问题；一个独立变更对应一个 PR。
@@ -59,9 +45,11 @@ git remote -v
 
 ## Worktree 归属、命名与清理
 
-- Codex 运行环境内禁止手动 `git worktree add`：Codex 只回收它自己创建的 worktree，手动创建的不进清理队列，会持续占用磁盘。需要新 worktree 时走 Codex 的 worktree 入口，其创建、命名与回收交给 Codex，本 skill 不介入。
-- 检测是否已在 linked worktree：`git rev-parse --git-dir` 与 `git rev-parse --git-common-dir` 解析为绝对路径后不同即处于 linked worktree；此时就地创建短期分支，禁止嵌套创建。路径包含 `/.codex/worktrees/` 表示由 Codex 管理。
-- 非 Codex 环境的手动兜底统一使用 `scripts/worktree.sh`，禁止直接执行 `git worktree add` 或 `git worktree remove`。
+- 先判断是否确需新建。`git rev-parse --git-dir` 与 `git rev-parse --git-common-dir` 解析为绝对路径后不同，表示已处于 linked worktree；符合修改预检时就地复用，需要时创建获授权的短期分支。禁止从 linked worktree 嵌套创建。
+- 确需新建时，优先级为：**用户明确指定的新建 worktree 规则 > 编码代理原生的新建 worktree 规则 > 本技能的兜底规则**。团队或公司规范以用户明确提供或指定的内容为准；通常没有此类覆盖，无需例行询问。若创建入口无法满足已明确的规则，停止并说明冲突。
+- 用户指定的规则只覆盖其明确规定的事项，且不得绕过运行环境的强制限制。其余按当前编码代理可核实的原生规则处理，例如使用 Codex 的 worktree 入口。由编码代理管理的 worktree 按其规则创建、命名和回收，禁止手动 `git worktree add` 或用本技能脚本替代。原生规则适用但入口不可用或创建失败时，停止新建并报告原因，不降级为手动兜底。
+- 只有没有用户规则覆盖创建方式、且当前编码代理没有适用的原生规则时，才用 `scripts/worktree.sh` 创建 worktree。以下目录、命名和清理要求只适用于本技能的手动兜底；禁止直接执行 `git worktree add` 或 `git worktree remove`。
+- 上述优先级只处理新建 worktree 及其归属，不改变分支基线、分支命名或操作授权。原生入口若产生临时分支或分离 HEAD，仍须通过修改前的分支关卡。
 - 手动 worktree 根目录为仓库同级 `<仓库>.worktrees`，可用 `GIT_WORKFLOW_WORKTREE_ROOT` 环境变量或 `--worktree-root` 参数覆盖。
 - worktree 目录名等于分支名把 `/` 替换为 `-`，即 `<type>-<short-description>`，例如 `feature/login-flow` 对应 `<仓库>.worktrees/feature-login-flow`。禁止时间戳、随机串、中文、空格、下划线和个人姓名。
 - 清理：合并后必须删除对应 worktree 并执行 `git worktree prune`；同一时间最多保留 1 个活动 worktree；不在 worktree 内重复安装依赖，除非本次任务确需运行测试。删除含未提交改动的 worktree 必须显式 `--force`。
@@ -80,9 +68,8 @@ bash "<skill目录>/scripts/worktree.sh" --action Remove --branch "feature/<shor
 
 ## 提交消息
 
-- 为人工或 AI 编写的业务提交使用固定格式：`<type>:<简短的中文描述>`；`type` 与描述之间不加空格。
+- 为人工或 AI 编写的业务提交使用单行格式 `<type>:<简短的中文描述>`；`type` 与描述之间不加空格，只说明一个独立改动。末尾中文分号 `；` 可保留但不强制，避免用多个分号拼接多个独立改动。
 - 仅使用以下 `type`：`feat`、`fix`、`core`、`docs`、`test`、`chore`。
-- 使用单行、简短的中文描述，只说明一个独立改动；末尾中文分号 `；` 可保留但不强制，避免用多个分号拼接多个独立改动。
 - 提交前按格式自检。例如：`feat:新增提现配置筛选`、`fix:修复订单状态更新`、`core:调整数据库装配`、`docs:补充部署说明`、`test:覆盖登录失败场景`、`chore:更新本地开发依赖`。
 - Git 平台自动生成的 Merge Commit，以及推送前同步 `develop` 时由 Git 自动生成的 Merge Commit，不适用本规则。
 
@@ -92,7 +79,7 @@ bash "<skill目录>/scripts/worktree.sh" --action Remove --branch "feature/<shor
 
 `--authorized` 不是 Token、密钥或平台权限，也不需要申请或生成；它是 agent 在已经核实用户明确授权后传入的本地确认开关。脚本只允许推送当前检出的 `feature/*`、`bugfix/*`、`hotfix/*` 或 `release/*` 分支；拒绝 `main`、`master`、`develop`、分离 HEAD、命名不合规分支及与当前分支不一致的推送目标。
 
-每次推送 `feature/*` 或 `bugfix/*` 前，脚本必须先获取远端最新 `develop` 并将 `<remote>/develop` 合并到当前分支，再执行推送。同步使用当前 `--remote` 参数指定的远端，默认 `origin`；`hotfix/*`、`release/*` 继续遵循生产分支基线，不合并 `develop`。
+推送 `feature/*`、`bugfix/*` 前，脚本先获取并合并最新的 `<remote>/develop`；`hotfix/*`、`release/*` 按生产分支基线，不合并 `develop`。远端由 `--remote` 指定，默认 `origin`；脚本执行普通 `git push --set-upstream <remote> <branch>`，不支持强推。
 
 同步发生冲突时，立即停止且不推送，不执行 `git merge --abort`；保留冲突文件和 Git 合并状态，明确申请人工接入解决冲突。人工完成合并后重新执行推送命令。该同步不改变完成开发任务后的自动提交条件、推送授权条件或业务提交消息规范。
 
@@ -101,15 +88,15 @@ bash "<skill目录>/scripts/push_branch.sh" \
   --repository-path "<仓库路径>" --branch "feature/<short-description>" --authorized
 ```
 
-脚本对 `feature/*`、`bugfix/*` 先执行与 `develop` 的同步合并，再执行普通 `git push --set-upstream <remote> <branch>`，不支持强推。推送成功仅表示远端接受了当前提交，不等于 CI 通过、PR 已创建、人工审核完成或代码已合并；完成报告必须分别说明这些状态。
+推送成功仅表示远端接受了当前提交，不等于 CI 通过、PR 已创建、人工审核完成或代码已合并；完成报告必须分别说明这些状态。
 
 ## 实现与测试闭环
 
-1. 定位：记录基线分支、当前分支、工作区差异、远端状态和目标模块。
-2. 设计：复述需求，写出可验证验收条件；有关键歧义就停下来请求确认。
-3. 测试先行：先写失败测试，为新行为或缺陷复现建立验收证据，再实现最小改动使其通过；不要删除、跳过测试或降低校验来让 CI 通过。
-4. 验证：运行目标模块要求的测试、类型检查、Lint、构建或真实请求；只根据实际输出声明结果。
-5. 对抗性审查：检查未覆盖路径、回归风险、并发/数据一致性、鉴权和权限边界、敏感信息泄露及不可逆操作。
+1. 定位：按修改前门禁确认仓库状态，读取相关 README、接口、调用链和测试，明确影响模块。
+2. 设计：修改前明确需求范围和可验证的验收条件；有关键歧义就停下来请求确认。
+3. 测试先行：先用失败测试覆盖新行为或复现缺陷，再只改必要文件使测试通过，保留他人改动；不得为通过 CI 而删除或跳过测试、降低校验。
+4. 验证：运行目标模块要求的测试、类型检查、Lint、构建或真实请求；接口、命令及验证结论以实际证据为准。
+5. 对抗性审查：检查回归风险、未覆盖路径、边界输入、并发与数据一致性、鉴权与权限、支付与部署影响、敏感信息泄露和不可逆操作。
 6. 报告：列出变更、实际命令与结果、风险/未验证项、主要文件和后续人工动作。
 
 ## PR 与合并
@@ -118,7 +105,7 @@ bash "<skill目录>/scripts/push_branch.sh" \
 
 - `feature/*`、`bugfix/*` 合入 `develop` 使用 Squash Merge，使一个 PR 对应一个完整提交。
 - `develop` 完整发布到生产分支，或 `release/*` 发布到生产分支，使用普通 Merge Commit，保留长期分支关系。
-- 选择性发布只 cherry-pick 对应 PR 的 Squash Commit，并记录原 PR 编号；不要挑选零散提交或 Merge Commit。
+- 选择性发布只 cherry-pick 已确认的对应 PR 的 Squash Commit，并记录原 PR 编号；不要挑选零散提交或 Merge Commit。
 - 未完成功能使用 Draft PR 或默认关闭的 Feature Flag；只有不影响现有流程且通过 CI 的代码才可提前合并。
 
 本机没有已登录且可用的 PR 客户端时，生成 PR 标题、正文、目标分支、变更摘要和验证证据后停止，并明确写出“等待人工创建 PR”；不得声称 PR 已创建、已审核或已合并。
@@ -126,8 +113,8 @@ bash "<skill目录>/scripts/push_branch.sh" \
 ## 发布与同步
 
 - 完整发布：`develop` 验证完成后创建生产发布 PR，人工最终确认后合入 `main` 或 `master`，按项目需要打 Tag 和部署。
-- 选择性发布：从生产分支创建 `release/<version>`，cherry-pick 已确认的 Squash Commit，重新执行构建、测试和依赖检查，再通过 PR 合入生产分支并删除 release 分支。依赖无法安全拆分时整体延期，优先考虑 Feature Flag。
-- 紧急修复：生产分支 → `hotfix/*` → PR 合入生产分支 → 立即将相同修复同步到 `develop`。
+- 选择性发布：按“分支定位与命名”创建 `release/<version>`，按“PR 与合并”的规则挑选提交，重新执行构建、测试和依赖检查，通过 PR 合入生产分支后按分支规则清理。依赖无法安全拆分时整体延期，优先考虑 Feature Flag。
+- 紧急修复：按“分支定位与命名”的 `hotfix/*` 路径，通过 PR 合入生产分支并完成同步。
 - 只有生产分支含有 `develop` 未包含的提交（hotfix、选择性发布后的额外修复或紧急人工变更）时才创建同步 PR；完整 `develop` → 生产发布不重复同步。
 
 ## AI 与人工审核边界
@@ -142,7 +129,7 @@ AI 可以创建分支、提交代码、编写 PR 说明、运行验证和辅助 
 
 演练必须执行真实 Git 命令：从 `develop` 创建 `feature/*` 或 `bugfix/*`，先让测试失败，再实现最小修改使测试通过，执行 `git add`、`git commit` 与 `git push -u origin <short-lived-branch>`。记录每一步的实际分支、提交 SHA、推送结果和测试结果。
 
-本地临时 bare remote 上的真实推送只证明 Git 命令可执行，不等于真实 PR、CI、人工审核、分支保护或合并。没有已登录且可用的 PR 客户端时，演练同样必须准备 PR 内容后停止，标记“等待人工创建 PR”，不得声称真实 PR 已创建、已审核或已合并。
+本地 bare remote 上的推送只证明 Git 命令可执行，不代表已验证真实 PR、CI、人工审核、分支保护或合并。PR 客户端不可用的情形按“PR 与合并”处理。
 
 ## 完成判定
 

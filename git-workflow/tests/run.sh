@@ -178,6 +178,9 @@ section "policy"
 content="$(cat "$SKILL_MD")"
 metadata="$(cat "$METADATA")"
 
+# The preflight and branch gate must route through one authoritative section.
+assert_eq "$(grep -c '^## 修改前强制' "$SKILL_MD")" "1" "修改前预检与分支关卡应只有一个规则入口"
+
 assert_contains "$content" 'git check-ignore -q' "SKILL.md 应含 gitignore 预检"
 assert_contains "$content" '被 `.gitignore` 排除的内容' "SKILL.md 应含 gitignore 规则"
 assert_contains "$content" '直接在当前工作目录修改和验证' "SKILL.md 应含就地验证规则"
@@ -185,7 +188,9 @@ assert_contains "$content" '不新建分支、不创建 worktree' "SKILL.md 应�
 assert_contains "$content" '仅适用于 Git 跟踪的测试、源代码与文档' "SKILL.md 应含关卡适用范围"
 assert_contains "$content" 'git rev-parse --git-dir' "SKILL.md 应含 linked worktree 检测"
 assert_contains "$content" 'git rev-parse --git-common-dir' "SKILL.md 应含 linked worktree 检测"
-assert_contains "$content" '/.codex/worktrees/' "SKILL.md 应含 Codex worktree 路径"
+assert_contains "$content" '用户明确指定的新建 worktree 规则 > 编码代理原生的新建 worktree 规则 > 本技能的兜底规则' "新建 worktree 应按明确的三级优先级处理"
+assert_not_contains "$content" '仅在非 Codex 环境' "修改关卡不应按是否为 Codex 选择手动兜底"
+assert_not_contains "$content" '非 Codex 环境的手动兜底' "worktree 规则不应把非 Codex 一律视为没有原生规则"
 assert_contains "$content" '禁止手动 `git worktree add`' "SKILL.md 应禁止手动创建"
 assert_contains "$content" '<仓库>.worktrees' "SKILL.md 应含手动根目录规则"
 assert_contains "$content" 'GIT_WORKFLOW_WORKTREE_ROOT' "SKILL.md 应含根目录覆盖变量"
